@@ -66,7 +66,8 @@ def read_branch_file(path):
         raise ValueError(f"{path.name}: 필요한 열이 없습니다 → {missing}")
 
     df = df[STANDARD].copy()
-    name = unicodedata.normalize("NFC", path.stem)  # 맥에서 만든 파일 이름은 자모가 풀려 있을 수 있다
+    # 맥에서 만든 파일 이름은 자모가 풀려 있을 수 있다
+    name = unicodedata.normalize("NFC", path.stem)
     df.insert(0, "지점", name.split("_")[0])
     df.insert(1, "원본파일", name + path.suffix)
     return df
@@ -76,7 +77,10 @@ def read_week(week, data_dir=DATA):
     """raw/<week> 폴더의 엑셀 파일을 모두 읽어 한 표로 합친다."""
     week_dir = Path(data_dir) / "raw" / week
     if not week_dir.is_dir():
-        raise FileNotFoundError(f"raw/{week} 폴더가 없습니다. 지점 파일을 이 폴더에 넣었는지 확인하세요.")
+        raise FileNotFoundError(
+            f"raw/{week} 폴더가 없습니다. "
+            "지점 파일을 이 폴더에 넣었는지 확인하세요."
+        )
     # '~$'로 시작하는 파일은 엑셀이 열려 있을 때 생기는 임시 파일이다
     files = sorted(p for p in week_dir.glob("*.xlsx") if not p.name.startswith("~$"))
     if not files:
@@ -121,7 +125,10 @@ def clean(merged, week):
     broken = df[df[["판매일", "수량", "단가", "금액"]].isna().any(axis=1)]
     if len(broken):
         where = ", ".join(broken["전표번호"].head(5))
-        raise ValueError(f"날짜나 숫자로 읽지 못한 줄이 {len(broken)}건 있습니다. 전표번호: {where}")
+        raise ValueError(
+            f"날짜나 숫자로 읽지 못한 줄이 {len(broken)}건 있습니다. "
+            f"전표번호: {where}"
+        )
     for col in ["수량", "단가", "금액"]:
         df[col] = df[col].astype("int64")
 
@@ -129,7 +136,9 @@ def clean(merged, week):
     dup = df.duplicated(subset=["지점", "전표번호"], keep="first")
     if dup.any():
         counts = df[dup].groupby("지점").size()
-        notes.append("중복 전표 제거: " + ", ".join(f"{b} {n}건" for b, n in counts.items()))
+        notes.append(
+            "중복 전표 제거: " + ", ".join(f"{b} {n}건" for b, n in counts.items())
+        )
     df = df[~dup].reset_index(drop=True)
 
     # 5. 지점이 적어 보낸 합계와 맞는지 검산한다
@@ -138,9 +147,12 @@ def clean(merged, week):
         theirs = int(to_number(pd.Series([row["금액"]])).iloc[0])
         ours = int(df.loc[df["지점"] == branch, "금액"].sum())
         mark = "일치" if theirs == ours else "불일치, 확인 필요"
-        notes.append(f"{branch} 합계 검산: 파일 {theirs:,}원 / 계산 {ours:,}원 → {mark}")
+        notes.append(
+            f"{branch} 합계 검산: 파일 {theirs:,}원 / 계산 {ours:,}원 → {mark}"
+        )
 
-    # 6. 고치지 않고 표시만 하는 줄: 금액이 수량×단가와 다르거나, 날짜가 그 주가 아닌 줄
+    # 6. 고치지 않고 표시만 하는 줄:
+    #    금액이 수량×단가와 다르거나, 날짜가 그 주가 아닌 줄
     monday = pd.Timestamp(week)
     wrong_amount = df["금액"] != df["수량"] * df["단가"]
     out_of_week = ~df["판매일"].between(monday, monday + pd.Timedelta(days=6))
@@ -243,14 +255,18 @@ def write_report(path, week, summary, pivot, top_items, sales, check):
         ws = writer.sheets["요약"]
         ws["A1"] = f"주간 판매 보고서 ({monday:%m/%d}~{sunday:%m/%d})"
         ws["A1"].font = Font(bold=True, size=14)
-        ws.cell(row=top_row, column=1, value="많이 팔린 품목 5개").font = Font(bold=True)
+        top_title = ws.cell(row=top_row, column=1, value="많이 팔린 품목 5개")
+        top_title.font = Font(bold=True)
         style_table(
             ws, header_row=3,
             formats={"B": MONEY, "C": MONEY, "D": PERCENT, "E": MONEY, "F": PERCENT},
             widths={"A": 14, "B": 18, "C": 14, "D": 12, "E": 14, "F": 12},
         )
         style_table(ws, header_row=top_row + 1)
-        for row in ws.iter_rows(min_row=top_row + 2, max_row=top_row + 1 + len(top_items), min_col=3, max_col=4):
+        for row in ws.iter_rows(
+            min_row=top_row + 2, max_row=top_row + 1 + len(top_items),
+            min_col=3, max_col=4,
+        ):
             for cell in row:
                 cell.number_format = MONEY
         for cell in ws[3 + n + 1]:  # '전체' 줄
@@ -258,7 +274,10 @@ def write_report(path, week, summary, pivot, top_items, sales, check):
         # 목표에 못 미친 달성률은 빨간 글자
         ws.conditional_formatting.add(
             f"D4:D{3 + n}",
-            CellIsRule(operator="lessThan", formula=["1"], font=Font(color="C00000", bold=True)),
+            CellIsRule(
+                operator="lessThan", formula=["1"],
+                font=Font(color="C00000", bold=True),
+            ),
         )
         # 지점별 금액과 목표 막대 그래프
         chart = BarChart()
@@ -269,7 +288,10 @@ def write_report(path, week, summary, pivot, top_items, sales, check):
         chart.y_axis.delete = False
         chart.legend.position = "b"
         chart.legend.overlay = False
-        chart.add_data(Reference(ws, min_col=2, max_col=3, min_row=3, max_row=3 + n), titles_from_data=True)
+        chart.add_data(
+            Reference(ws, min_col=2, max_col=3, min_row=3, max_row=3 + n),
+            titles_from_data=True,
+        )
         chart.set_categories(Reference(ws, min_col=1, min_row=4, max_row=3 + n))
         chart.width, chart.height = 16, 8.5
         ws.add_chart(chart, "H3")
@@ -281,15 +303,26 @@ def write_report(path, week, summary, pivot, top_items, sales, check):
         # 품목군별 시트
         ws = writer.sheets["품목군별"]
         cols = [get_column_letter(i) for i in range(2, ws.max_column + 1)]
-        style_table(ws, 1, formats={c: MONEY for c in cols}, widths={"A": 12, **{c: 14 for c in cols}})
+        style_table(
+            ws, 1,
+            formats={c: MONEY for c in cols},
+            widths={"A": 12, **{c: 14 for c in cols}},
+        )
         for cell in ws[ws.max_row]:
             cell.font = Font(bold=True)
 
         # 상세, 확인필요 시트
-        widths = {"A": 9, "B": 22, "C": 15, "D": 12, "E": 10, "F": 20, "G": 8, "H": 10, "I": 12, "J": 26}
+        widths = {
+            "A": 9, "B": 22, "C": 15, "D": 12, "E": 10,
+            "F": 20, "G": 8, "H": 10, "I": 12, "J": 26,
+        }
         for name in ["상세", "확인필요"]:
             ws = writer.sheets[name]
-            style_table(ws, 1, formats={"D": DATE, "G": MONEY, "H": MONEY, "I": MONEY}, widths=widths)
+            style_table(
+                ws, 1,
+                formats={"D": DATE, "G": MONEY, "H": MONEY, "I": MONEY},
+                widths=widths,
+            )
             ws.freeze_panes = "A2"
         writer.sheets["상세"].auto_filter.ref = writer.sheets["상세"].dimensions
 
@@ -297,11 +330,16 @@ def write_report(path, week, summary, pivot, top_items, sales, check):
 # 6장: 한 번에 실행하기 -----------------------------------------------
 
 def make_report(week, data_dir=DATA, output_dir=OUTPUT):
-    """week(그 주 월요일, 'YYYY-MM-DD')의 보고서를 만들고 (파일 경로, 메모 목록)을 돌려준다."""
+    """week(그 주 월요일, 'YYYY-MM-DD')의 보고서를 만든다.
+
+    (파일 경로, 메모 목록)을 돌려준다.
+    """
     data_dir, output_dir = Path(data_dir), Path(output_dir)
     monday = pd.Timestamp(week)
     if monday.weekday() != 0:
-        raise ValueError(f"{week}은 월요일이 아닙니다. 보고할 주의 월요일 날짜를 넣으세요.")
+        raise ValueError(
+            f"{week}은 월요일이 아닙니다. 보고할 주의 월요일 날짜를 넣으세요."
+        )
     prev_week = f"{monday - pd.Timedelta(days=7):%Y-%m-%d}"
 
     sales, check, notes = clean(read_week(week, data_dir), week)
@@ -320,11 +358,15 @@ def make_report(week, data_dir=DATA, output_dir=OUTPUT):
     try:
         write_report(path, week, summary, pivot, top_items, sales, check)
     except PermissionError:
-        raise ValueError(f"{path.name} 파일이 엑셀에서 열려 있습니다. 닫고 다시 실행하세요.") from None
+        raise ValueError(
+            f"{path.name} 파일이 엑셀에서 열려 있습니다. 닫고 다시 실행하세요."
+        ) from None
 
     # 마지막 검산: 저장한 파일을 다시 읽어 합계가 같은지 본다
     saved = pd.read_excel(path, sheet_name="상세")
     if int(saved["금액"].sum()) != int(sales["금액"].sum()):
-        raise ValueError("저장한 파일의 합계가 계산한 합계와 다릅니다. 보고서를 보내지 마세요.")
+        raise ValueError(
+            "저장한 파일의 합계가 계산한 합계와 다릅니다. 보고서를 보내지 마세요."
+        )
     notes.append(f"판매 {len(sales)}건, 합계 {int(sales['금액'].sum()):,}원")
     return path, notes
