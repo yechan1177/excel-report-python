@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+.ipynb_checkpoints/
+~$*.xlsx
+output/run_log.txt
+output/연습_*.xlsx
